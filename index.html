@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FP&amp;A AutoModel v2.0 — Phân tích &amp; Hoạch định Tài chính Tự động</title>
+  <link rel="stylesheet" href="styles.css?v=2.0" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-block">
+      <h1>
+        FP&amp;A AutoModel
+        <span class="version-badge">v2.0 · PDF/Excel</span>
+      </h1>
+      <div class="brand-subtitle" id="headerCompanySubtitle">
+        Công ty Cổ phần Giống Bò sữa Mộc Châu (UPCoM: MCM) · BCTC Kiểm toán 2019–2024
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost" onclick="window.exportFullExcel()">Xuất Báo cáo Excel (.xlsx)</button>
+      <button class="btn btn-ghost" onclick="window.downloadTemplateCsv()">Tải File Mẫu (.csv)</button>
+      <button class="btn btn-ghost" onclick="window.print()">In / Lưu PDF</button>
+    </div>
+  </header>
+
+  <div class="status-bar">
+    <div id="globalStatus" class="status-msg ok">Sẵn sàng (v2.0): Đang hiển thị dữ liệu mẫu. Vào Tab 1 để kéo-thả file PDF / Excel BCTC doanh nghiệp của bạn.</div>
+    <div id="dataMetaBadge" style="color: var(--text-muted); font-weight: 600;">Đơn vị hiển thị: Tỷ VND</div>
+  </div>
+
+  <nav class="nav-tabs" role="tablist">
+    <button class="tab-btn active" data-tab="overview" onclick="window.switchTab('overview')">Tổng quan Điều hành</button>
+    <button class="tab-btn" data-tab="step1" onclick="window.switchTab('step1')">1. Kiểm chứng &amp; Chuẩn hóa</button>
+    <button class="tab-btn" data-tab="step2" onclick="window.switchTab('step2')">2. Phân tích Biến động</button>
+    <button class="tab-btn" data-tab="step3" onclick="window.switchTab('step3')">3. Yếu tố Thúc đẩy (Drivers)</button>
+    <button class="tab-btn" data-tab="step4" onclick="window.switchTab('step4')">4. Kịch bản &amp; Đề xuất AI</button>
+  </nav>
+
+  <main class="main-container">
+    <!-- TAB 0: OVERVIEW -->
+    <section id="tab-overview" class="tab-panel active">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Bảng điều khiển Tổng quan Tài chính (Executive Summary)</div>
+          <div class="section-desc">Toàn cảnh kết quả kinh doanh, biên lợi nhuận và nền tảng tiền mặt qua các năm tài chính.</div>
+        </div>
+        <div class="control-group">
+          <label for="overviewYearSelect">Năm trọng tâm:</label>
+          <select id="overviewYearSelect" onchange="window.renderOverview()"></select>
+        </div>
+      </div>
+
+      <div id="overviewKpis" class="grid-kpi"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Doanh thu thuần, Lợi nhuận sau thuế &amp; Biên lợi nhuận (2019–2024)</div>
+          <div class="chart-wrap"><canvas id="chartOverviewPnl"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Cấu trúc Tiền mặt, Tiền gửi kỳ hạn &amp; Dòng tiền tự do (FCF)</div>
+          <div class="chart-wrap"><canvas id="chartOverviewCash"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Tóm tắt Chỉ tiêu Tài chính Chủ chốt (Tỷ VND)</div>
+        <div class="table-wrap">
+          <table id="tableOverviewSummary"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 1: STEP 1 DATA INTEGRITY -->
+    <section id="tab-step1" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Bước 1: Kiểm chứng &amp; Chuẩn hóa Dữ liệu (Data Integrity)</div>
+          <div class="section-desc">Đảm bảo một nguồn sự thật duy nhất (Single Source of Truth), tự động kiểm tra cân đối kế toán và phát hiện sai lệch chuẩn mực.</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="window.runIntegrityChecks()">Chạy Kiểm chứng lại</button>
+          <button class="btn" onclick="window.resetDefaultData()">Khôi phục Dữ liệu Mẫu</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Nạp dữ liệu BCTC từ PDF (chuẩn TT200), Excel (.xlsx), CSV hoặc JSON</span>
+          <button class="btn btn-sm" onclick="window.openManualStaging()">+ Nhập / Sửa nhanh bằng tay</button>
+        </div>
+        <div id="dropzone" class="dropzone" onclick="document.getElementById('fileInput').click()">
+          <strong>Kéo thả 1 hoặc nhiều file PDF BCTC / Excel / CSV / JSON vào đây</strong> (hoặc bấm để chọn tệp)<br />
+          <span style="font-size:12px; color:var(--text-muted);">
+            Tự động bóc tách Mã số Thông tư 200 (B01-DN, B02-DN, B03-DN) từ PDF có lớp chữ hoặc bảng Excel nhiều năm. Xử lý 100% trên trình duyệt, không gửi dữ liệu ra ngoài.
+          </span>
+          <input type="file" id="fileInput" accept=".pdf,.xlsx,.xls,.csv,.json" multiple style="display:none" onchange="window.handleFileUpload(event)" />
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <label for="companyNameInput" style="font-weight:600; font-size:12.5px;">Tên doanh nghiệp:</label>
+          <input type="text" id="companyNameInput" style="min-width:300px;" placeholder="Nhập tên doanh nghiệp..." />
+          <button class="btn btn-sm btn-accent" onclick="window.updateCompanyName()">Cập nhật Tên</button>
+          <span id="step1ActionStatus" class="status-msg"></span>
+        </div>
+
+        <div id="stagingBox" class="staging-box">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+            <div>
+              <strong>Kiểm tra &amp; Chỉnh sửa số liệu trước khi nạp vào Mô hình (Đơn vị: Tỷ VND)</strong>
+              <div id="stagingInfo" style="font-size:12px; color:var(--text-muted);"></div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm btn-primary" onclick="window.commitStagingData('replace')">Thay thế toàn bộ &amp; Chạy FP&amp;A</button>
+              <button class="btn btn-sm btn-accent" onclick="window.commitStagingData('merge')">Gộp thêm năm mới</button>
+              <button class="btn btn-sm" onclick="window.closeStagingBox()">Đóng</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="tableStaging" class="staging-table"></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Kết quả Kiểm toán Tự động (Data Integrity Rules)</span>
+          <span id="integritySummaryBadge" class="badge badge-pos">Đang kiểm tra...</span>
+        </div>
+        <div id="integrityChecklist" class="check-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Bảng Dữ liệu Chuẩn hóa (Đơn vị: Tỷ VND)</div>
+        <div class="table-wrap">
+          <table id="tableCleanData"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: STEP 2 VARIANCE ANALYSIS -->
+    <section id="tab-step2" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Bước 2: Phân tích Biến động (Variance Analysis)</div>
+          <div class="section-desc">So sánh Thực tế với Kỳ trước hoặc Kế hoạch (Budget), tách bạch tác động Có lợi/Bất lợi và Nguyên nhân Chủ quan/Khách quan.</div>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <div class="control-group">
+          <label for="varMode">Chế độ so sánh:</label>
+          <select id="varMode" onchange="window.renderVariance()">
+            <option value="yoy">Thực tế vs Năm trước (YoY)</option>
+            <option value="budget">Thực tế 2024 vs Kế hoạch (Actual vs Budget)</option>
+          </select>
+        </div>
+        <div class="control-group" id="varPeriodControls">
+          <label for="varActualYear">Kỳ thực tế:</label>
+          <select id="varActualYear" onchange="window.renderVariance()"></select>
+          <label for="varBaseYear">Kỳ so sánh:</label>
+          <select id="varBaseYear" onchange="window.renderVariance()"></select>
+        </div>
+        <div class="control-group" id="varBudgetControls" style="display:none;">
+          <label for="budgetRevInput">KH Doanh thu (tỷ):</label>
+          <input type="number" id="budgetRevInput" step="10" style="width:100px;" onchange="window.updateBudgetAndRender()" />
+          <label for="budgetNetInput">KH LNST (tỷ):</label>
+          <input type="number" id="budgetNetInput" step="5" style="width:90px;" onchange="window.updateBudgetAndRender()" />
+        </div>
+      </div>
+
+      <div id="varianceKpis" class="grid-kpi"></div>
+
+      <div class="card">
+        <div class="card-title">Biểu đồ Cầu nối Lợi nhuận Trước thuế (PBT Profit Bridge — Tỷ VND)</div>
+        <div class="chart-wrap"><canvas id="chartVarianceBridge"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Bảng Phân tích Biến động Chi tiết &amp; Phân loại Nguyên nhân</div>
+        <div class="table-wrap">
+          <table id="tableVariance"></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: STEP 3 DRIVER-BASED ANALYSIS -->
+    <section id="tab-step3" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Bước 3: Phân tích Yếu tố Thúc đẩy Kinh doanh (Driver-based Analysis)</div>
+          <div class="section-desc">Bóc tách các chỉ số vận hành cốt lõi: cơ cấu sản phẩm, kênh Công ty mẹ, chi phí theo yếu tố và chu kỳ vốn lưu động (CCC).</div>
+        </div>
+      </div>
+
+      <div id="driverKpis" class="grid-kpi"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Cơ cấu Doanh thu &amp; Tỷ trọng Kênh Công ty mẹ (Vinamilk)</div>
+          <div class="chart-wrap"><canvas id="chartDriverRevenue"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Cơ cấu Chi phí Sản xuất Kinh doanh theo Yếu tố (% Doanh thu thuần)</div>
+          <div class="chart-wrap"><canvas id="chartDriverCosts"></canvas></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Hiệu suất Vốn lưu động (DSO, DIO, DPO &amp; CCC — Số ngày)</div>
+          <div class="chart-wrap"><canvas id="chartDriverWorkingCap"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Năng suất Lao động (Doanh thu / Nhân viên &amp; Quy mô Nhân sự)</div>
+          <div class="chart-wrap"><canvas id="chartDriverProductivity"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: STEP 4 SCENARIO PLANNING & AI RECOMMENDATIONS -->
+    <section id="tab-step4" class="tab-panel">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Bước 4: Xây dựng Kịch bản Tương lai (2025–2027) &amp; Đề xuất Hành động</div>
+          <div class="section-desc">Mô phỏng What-If tức thì dựa trên các biến số vận hành (Drivers), kiểm tra độ nhạy giá nguyên liệu và nhận khuyến nghị tự động.</div>
+        </div>
+        <div class="scenario-pills">
+          <button class="pill-btn" data-scen="bear" onclick="window.applyScenarioPreset('bear')">Kịch bản Thận trọng (Bear)</button>
+          <button class="pill-btn active" data-scen="base" onclick="window.applyScenarioPreset('base')">Kịch bản Cơ sở (Base)</button>
+          <button class="pill-btn" data-scen="bull" onclick="window.applyScenarioPreset('bull')">Kịch bản Lạc quan (Bull)</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Bảng điều khiển Biến số Dự báo (Driver-based What-If Sliders)</div>
+        <div class="slider-grid">
+          <div class="slider-box">
+            <div class="slider-top"><span>Tăng trưởng Doanh thu (%/năm)</span><span class="slider-val" id="valRevGrowth">+6.0%</span></div>
+            <input type="range" id="slRevGrowth" min="-15" max="25" step="0.5" value="6" oninput="window.runScenarioModel()" />
+          </div>
+          <div class="slider-box">
+            <div class="slider-top"><span>Biến động Giá Nguyên liệu đầu vào (%)</span><span class="slider-val" id="valMatShock">+2.0%</span></div>
+            <input type="range" id="slMatShock" min="-10" max="15" step="0.5" value="2" oninput="window.runScenarioModel()" />
+          </div>
+          <div class="slider-box">
+            <div class="slider-top"><span>Chi phí Quảng cáo &amp; KM (% DTT)</span><span class="slider-val" id="valPromoPct">18.5%</span></div>
+            <input type="range" id="slPromoPct" min="10" max="26" step="0.5" value="18.5" oninput="window.runScenarioModel()" />
+          </div>
+          <div class="slider-box">
+            <div class="slider-top"><span>Lãi suất Tiền gửi kỳ hạn (%/năm)</span><span class="slider-val" id="valDepositRate">5.5%</span></div>
+            <input type="range" id="slDepositRate" min="2" max="11" step="0.25" value="5.5" oninput="window.runScenarioModel()" />
+          </div>
+          <div class="slider-box">
+            <div class="slider-top"><span>Thuế suất TNDN hiệu dụng (%)</span><span class="slider-val" id="valTaxRate">12.5%</span></div>
+            <input type="range" id="slTaxRate" min="5" max="20" step="0.5" value="12.5" oninput="window.runScenarioModel()" />
+          </div>
+          <div class="slider-box">
+            <div class="slider-top"><span>CapEx đầu tư (% Doanh thu)</span><span class="slider-val" id="valCapexPct">5.0%</span></div>
+            <input type="range" id="slCapexPct" min="1" max="15" step="0.5" value="5" oninput="window.runScenarioModel()" />
+          </div>
+        </div>
+      </div>
+
+      <div id="scenarioKpis" class="grid-kpi"></div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Dự báo Doanh thu &amp; Lợi nhuận sau thuế (Lịch sử + 3 năm Kịch bản)</div>
+          <div class="chart-wrap"><canvas id="chartScenarioForecast"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Ma trận Độ nhạy LNST 2025 (Tỷ VND): Tăng trưởng DT × Giá Nguyên liệu</div>
+          <div class="table-wrap">
+            <table id="tableSensitivity" class="sens-table"></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Bảng Dự phóng P&amp;L và Dòng tiền Tự do 3 năm (2025–2027 — Tỷ VND)</div>
+        <div class="table-wrap">
+          <table id="tableForecast"></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Khuyến nghị Hành động Tự động cho CEO / CFO (AI FP&amp;A Advisor)</div>
+        <div id="recommendationList" class="rec-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Thư viện Prompt Báo cáo FP&amp;A cho AI (Bản gốc &amp; Bản tự động ghép số liệu)</span>
+          <span id="copyStatus" class="status-msg"></span>
+        </div>
+        <div class="prompt-grid">
+          <div class="prompt-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong>Mẫu Prompt Gốc (Chuẩn FP&amp;A 4 bước)</strong>
+              <button class="btn btn-sm" onclick="window.copyPrompt('promptRaw')">Copy Bản gốc</button>
+            </div>
+            <textarea id="promptRaw" readonly></textarea>
+          </div>
+          <div class="prompt-box">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong>Bản đã ghép Tự động Số liệu &amp; Kịch bản hiện tại</strong>
+              <button class="btn btn-sm btn-primary" onclick="window.copyPrompt('promptInjected')">Copy Bản đã ghép số liệu</button>
+            </div>
+            <textarea id="promptInjected" readonly></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="data_sample.js?v=2.0"></script>
+  <script src="pdf_parser.js?v=2.0"></script>
+  <script src="app.js?v=2.0"></script>
+</body>
+</html>
