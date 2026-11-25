@@ -1,10 +1,11 @@
-/* FP&A AutoModel v3.0 - Core Engine (Defensive & Idempotent) */
+/* FP&A AutoModel v3.1 - Core Engine (Defensive & Idempotent) */
 (function () {
   'use strict';
 
   const STORAGE_KEY_DATA = 'fpa_automodel_data_v3';
   const STORAGE_KEY_META = 'fpa_automodel_meta_v3';
   const STORAGE_KEY_BUDGET = 'fpa_automodel_budget_v3';
+  const STORAGE_KEY_CUSTOM_PROFILES = 'fpa_automodel_custom_profiles_v31';
 
   const state = {
     meta: null,
@@ -1010,9 +1011,71 @@ Yêu cầu: Phân tích sắc bén theo đúng 4 bước FP&A và chốt 3 quy�
     }
   }
 
+
+  function getCustomProfiles() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY_CUSTOM_PROFILES) || '{}'); }
+    catch (_) { return {}; }
+  }
+
+  function refreshPresetDropdown(selectedKey) {
+    const sel = document.getElementById('samplePresetSelect');
+    if (!sel) return;
+    const builtins = window.FPA_SAMPLE_PRESETS || {};
+    const customs = getCustomProfiles();
+    sel.innerHTML = '';
+    const labels = {
+      msn: 'Mẫu 1: Tập đoàn Masan (Hợp nhất 2021–2025)',
+      mcm: 'Mẫu 2: Mộc Châu Milk (Riêng 2019–2024)',
+      vnm: 'Mẫu 3: Vinamilk — VNM (Hợp nhất IFRS 2022–2025)'
+    };
+    Object.keys(builtins).forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k;
+      opt.textContent = labels[k] || builtins[k].meta.companyName;
+      sel.appendChild(opt);
+    });
+    Object.keys(customs).forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k;
+      const d = customs[k].data || [];
+      const span = d.length ? ` (${d[0].year}–${d[d.length - 1].year})` : '';
+      opt.textContent = `Hồ sơ đã lưu: ${customs[k].meta.companyName}${span}`;
+      sel.appendChild(opt);
+    });
+    if (selectedKey && [...sel.options].some(o => o.value === selectedKey)) {
+      sel.value = selectedKey;
+    }
+  }
+
+  function saveAsCustomProfile() {
+    try {
+      const nameVal = (document.getElementById('companyNameInput').value || state.meta.companyName || '').trim();
+      if (!nameVal) {
+        setStatus('Vui lòng nhập tên doanh nghiệp trước khi lưu hồ sơ.', 'warn', 'step1ActionStatus');
+        return;
+      }
+      state.meta.companyName = nameVal;
+      const key = 'custom_' + nameVal.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 28);
+      const customs = getCustomProfiles();
+      customs[key] = {
+        meta: JSON.parse(JSON.stringify({ ...state.meta, id: key })),
+        data: JSON.parse(JSON.stringify(state.data)),
+        budget: JSON.parse(JSON.stringify(state.budget))
+      };
+      localStorage.setItem(STORAGE_KEY_CUSTOM_PROFILES, JSON.stringify(customs));
+      saveState();
+      refreshPresetDropdown(key);
+      syncHeaderAndSelectors();
+      setStatus(`Đã lưu hồ sơ "${nameVal}" vào danh sách chọn nhanh góc trên!`, 'ok', 'step1ActionStatus');
+    } catch (err) {
+      setStatus('Lỗi lưu hồ sơ: ' + err.message, 'err', 'step1ActionStatus');
+    }
+  }
+
   function switchSamplePreset(presetKey) {
     try {
-      const preset = window.FPA_SAMPLE_PRESETS && window.FPA_SAMPLE_PRESETS[presetKey];
+      const customs = getCustomProfiles();
+      const preset = (window.FPA_SAMPLE_PRESETS && window.FPA_SAMPLE_PRESETS[presetKey]) || customs[presetKey];
       if (!preset) return;
       state.meta = JSON.parse(JSON.stringify(preset.meta));
       state.data = JSON.parse(JSON.stringify(preset.data));
@@ -1136,6 +1199,7 @@ Yêu cầu: Phân tích sắc bén theo đúng 4 bước FP&A và chốt 3 quy�
       localStorage.removeItem(STORAGE_KEY_META);
       localStorage.removeItem(STORAGE_KEY_BUDGET);
       loadState();
+      refreshPresetDropdown(state.meta && state.meta.id);
       syncHeaderAndSelectors();
       runIntegrityChecks();
       renderCleanTable();
@@ -1233,6 +1297,7 @@ Yêu cầu: Phân tích sắc bén theo đúng 4 bước FP&A và chốt 3 quy�
   window.commitStagingData = commitStagingData;
   window.cancelPdfProcessing = cancelPdfProcessing;
   window.switchSamplePreset = switchSamplePreset;
+  window.saveAsCustomProfile = saveAsCustomProfile;
   window.updateCompanyName = updateCompanyName;
   window.renderVariance = renderVariance;
   window.updateBudgetAndRender = updateBudgetAndRender;
@@ -1246,6 +1311,7 @@ Yêu cầu: Phân tích sắc bén theo đúng 4 bước FP&A và chốt 3 quy�
   document.addEventListener('DOMContentLoaded', () => {
     try {
       loadState();
+      refreshPresetDropdown(state.meta && state.meta.id);
       syncHeaderAndSelectors();
       setupDropzone();
       renderOverview();
