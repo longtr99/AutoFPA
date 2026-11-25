@@ -3,24 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FP&amp;A AutoModel v2.0 — Phân tích &amp; Hoạch định Tài chính Tự động</title>
-  <link rel="stylesheet" href="styles.css?v=2.0" />
+  <title>FP&amp;A AutoModel v3.0 — Phân tích &amp; Hoạch định Tài chính Tự động</title>
+  <link rel="stylesheet" href="styles.css?v=3.0" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <header class="app-header">
     <div class="brand-block">
       <h1>
         FP&amp;A AutoModel
-        <span class="version-badge">v2.0 · PDF/Excel</span>
+        <span class="version-badge">v3.0 · Auto-OCR TT200/TT202</span>
       </h1>
       <div class="brand-subtitle" id="headerCompanySubtitle">
         Công ty Cổ phần Giống Bò sữa Mộc Châu (UPCoM: MCM) · BCTC Kiểm toán 2019–2024
       </div>
     </div>
     <div class="header-actions">
+      <select id="samplePresetSelect" class="preset-select" onchange="window.switchSamplePreset(this.value)">
+        <option value="msn">Mẫu 1: Tập đoàn Masan (Hợp nhất 2021–2025)</option>
+        <option value="mcm">Mẫu 2: Mộc Châu Milk (Riêng 2019–2024)</option>
+      </select>
       <button class="btn btn-ghost" onclick="window.exportFullExcel()">Xuất Báo cáo Excel (.xlsx)</button>
       <button class="btn btn-ghost" onclick="window.downloadTemplateCsv()">Tải File Mẫu (.csv)</button>
       <button class="btn btn-ghost" onclick="window.print()">In / Lưu PDF</button>
@@ -28,7 +33,7 @@
   </header>
 
   <div class="status-bar">
-    <div id="globalStatus" class="status-msg ok">Sẵn sàng (v2.0): Đang hiển thị dữ liệu mẫu. Vào Tab 1 để kéo-thả file PDF / Excel BCTC doanh nghiệp của bạn.</div>
+    <div id="globalStatus" class="status-msg ok">Sẵn sàng (v3.0): Hỗ trợ tự động OCR tiếng Việt cho PDF ảnh scan (TT200 & TT202 Hợp nhất, tự nhận diện Triệu VND / VND).</div>
     <div id="dataMetaBadge" style="color: var(--text-muted); font-weight: 600;">Đơn vị hiển thị: Tỷ VND</div>
   </div>
 
@@ -93,10 +98,18 @@
           <span>Nạp dữ liệu BCTC từ PDF (chuẩn TT200), Excel (.xlsx), CSV hoặc JSON</span>
           <button class="btn btn-sm" onclick="window.openManualStaging()">+ Nhập / Sửa nhanh bằng tay</button>
         </div>
+        <div class="ocr-bar">
+          <span><strong>Chế độ Auto-OCR cho PDF ảnh scan:</strong> Chỉ quét trang bìa (trang 1) + vùng bảng B01/B02/B03 từ trang</span>
+          <input type="number" id="ocrStartPage" value="5" min="2" max="50" />
+          <span>đến trang</span>
+          <input type="number" id="ocrEndPage" value="14" min="3" max="60" />
+          <span style="color:var(--text-muted);">(tiết kiệm 90% thời gian trên file 80–120 trang)</span>
+          <button id="btnCancelOcr" class="btn btn-sm" style="display:none; border-color:var(--danger); color:var(--danger);" onclick="window.cancelPdfProcessing()">Dừng OCR</button>
+        </div>
         <div id="dropzone" class="dropzone" onclick="document.getElementById('fileInput').click()">
-          <strong>Kéo thả 1 hoặc nhiều file PDF BCTC / Excel / CSV / JSON vào đây</strong> (hoặc bấm để chọn tệp)<br />
+          <strong>Kéo thả 1 hoặc nhiều file PDF BCTC (kể cả PDF ảnh scan đóng dấu đỏ) / Excel / CSV / JSON vào đây</strong><br />
           <span style="font-size:12px; color:var(--text-muted);">
-            Tự động bóc tách Mã số Thông tư 200 (B01-DN, B02-DN, B03-DN) từ PDF có lớp chữ hoặc bảng Excel nhiều năm. Xử lý 100% trên trình duyệt, không gửi dữ liệu ra ngoài.
+            Tự động nhận diện chuẩn TT200 &amp; TT202 Hợp nhất (B01/B02/B03), tự quy đổi đơn vị Triệu VND / VND và tự kích hoạt OCR tiếng Việt khi gặp PDF ảnh scan.
           </span>
           <input type="file" id="fileInput" accept=".pdf,.xlsx,.xls,.csv,.json" multiple style="display:none" onchange="window.handleFileUpload(event)" />
         </div>
@@ -200,7 +213,7 @@
 
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">Cơ cấu Doanh thu &amp; Tỷ trọng Kênh Công ty mẹ (Vinamilk)</div>
+          <div class="card-title">Cơ cấu Doanh thu &amp; Biên Lợi nhuận Hoạt động</div>
           <div class="chart-wrap"><canvas id="chartDriverRevenue"></canvas></div>
         </div>
         <div class="card">
@@ -317,8 +330,8 @@
     </section>
   </main>
 
-  <script src="data_sample.js?v=2.0"></script>
-  <script src="pdf_parser.js?v=2.0"></script>
-  <script src="app.js?v=2.0"></script>
+  <script src="data_sample.js?v=3.0"></script>
+  <script src="pdf_parser.js?v=3.0"></script>
+  <script src="app.js?v=3.0"></script>
 </body>
 </html>

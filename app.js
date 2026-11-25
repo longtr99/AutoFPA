@@ -1,10 +1,10 @@
-/* FP&A AutoModel v2.0 - Core Engine (Defensive & Idempotent) */
+/* FP&A AutoModel v3.0 - Core Engine (Defensive & Idempotent) */
 (function () {
   'use strict';
 
-  const STORAGE_KEY_DATA = 'fpa_automodel_data_v1';
-  const STORAGE_KEY_META = 'fpa_automodel_meta_v1';
-  const STORAGE_KEY_BUDGET = 'fpa_automodel_budget_v1';
+  const STORAGE_KEY_DATA = 'fpa_automodel_data_v3';
+  const STORAGE_KEY_META = 'fpa_automodel_meta_v3';
+  const STORAGE_KEY_BUDGET = 'fpa_automodel_budget_v3';
 
   const state = {
     meta: null,
@@ -12,7 +12,8 @@
     budget: null,
     charts: {},
     forecast: [],
-    staging: []
+    staging: [],
+    abortController: null
   };
 
   // --- Utilities ---
@@ -396,6 +397,7 @@
       const dSell = -(actual.selling_exp - base.selling_exp);
       const dAdmin = -(actual.admin_exp - base.admin_exp);
       const dFin = (actual.fin_inc - actual.fin_exp) - (base.fin_inc - (base.fin_exp || 0));
+      const dAssoc = (actual.assoc_profit || 0) - (base.assoc_profit || 0);
       const dOther = (actual.other_profit || 0) - (base.other_profit || 0);
       const dPbt = actual.pbt - base.pbt;
       const dNet = actual.net_profit - base.net_profit;
@@ -432,6 +434,7 @@
         { label: 'CP Bán hàng', val: toBn(dSell) },
         { label: 'CP QLDN', val: toBn(dAdmin) },
         { label: 'Tài chính ròng', val: toBn(dFin) },
+        ...(Math.abs(dAssoc) > 0 ? [{ label: 'Lãi CT Liên kết', val: toBn(dAssoc) }] : []),
         { label: 'LN Khác', val: toBn(dOther) },
         { label: `LNTT ${actualLabel}`, val: toBn(actual.pbt), isTotal: true }
       ];
@@ -490,7 +493,8 @@
         { name: 'Lợi nhuận gộp', act: actual.gross_profit, bas: base.gross_profit, higherIsBetter: true, bold: true, nature: 'Phản ánh sức mạnh định giá & kiểm soát giá thành' },
         { name: 'Chi phí bán hàng (gồm KM)', act: actual.selling_exp, bas: base.selling_exp, higherIsBetter: false, nature: 'Chủ quan (Quản trị ngân sách quảng cáo & khuyến mãi)' },
         { name: 'Chi phí quản lý DN', act: actual.admin_exp, bas: base.admin_exp, higherIsBetter: false, nature: 'Chủ quan (Tinh gọn bộ máy vận hành)' },
-        { name: 'Doanh thu tài chính', act: actual.fin_inc, bas: base.fin_inc, higherIsBetter: true, nature: 'Khách quan (Mặt bằng lãi suất tiền gửi ngân hàng)' },
+        { name: 'Doanh thu tài chính', act: actual.fin_inc, bas: base.fin_inc, higherIsBetter: true, nature: 'Khách quan (Mặt bằng lãi suất / thu nhập đầu tư)' },
+        ...(((actual.assoc_profit || 0) !== 0 || (base.assoc_profit || 0) !== 0) ? [{ name: 'Phần lãi/lỗ Công ty liên kết', act: actual.assoc_profit || 0, bas: base.assoc_profit || 0, higherIsBetter: true, nature: 'Hợp nhất (Kết quả kinh doanh công ty liên kết)' }] : []),
         { name: 'Lợi nhuận trước thuế', act: actual.pbt, bas: base.pbt, higherIsBetter: true, bold: true, nature: 'Tổng hợp tác động vận hành & tài chính' },
         { name: 'Lợi nhuận sau thuế', act: actual.net_profit, bas: base.net_profit, higherIsBetter: true, bold: true, nature: 'Bao gồm ảnh hưởng ưu đãi thuế nông nghiệp' }
       ];
@@ -928,15 +932,22 @@ Yêu cầu: Phân tích sắc bén theo đúng 4 bước FP&A và chốt 3 quy�
         const ext = file.name.split('.').pop().toLowerCase();
         if (ext === 'pdf') {
           if (!window.FPA_PARSER) throw new Error('Module pdf_parser.js chưa sẵn sàng.');
+          const ocrStartPage = Number(document.getElementById('ocrStartPage')?.value) || 5;
+          const ocrEndPage = Number(document.getElementById('ocrEndPage')?.value) || 14;
+          state.abortController = new AbortController();
+          const cancelBtn = document.getElementById('btnCancelOcr');
+          if (cancelBtn) cancelBtn.style.display = 'inline-flex';
           const buf = await file.arrayBuffer();
-          const { lines, totalChars, numPages } = await window.FPA_PARSER.extractLinesFromPDF(buf, (msg) => {
-            setStatus(`[${file.name}] ${msg}`, 'warn', 'step1ActionStatus');
+          const { lines, numPages, usedOcr } = await window.FPA_PARSER.extractLinesFromPDF(buf, {
+            ocrStartPage,
+            ocrEndPage,
+            abortSignal: state.abortController.signal,
+            onProgress: (msg) => setStatus(`[${file.name}] ${msg}`, 'warn', 'step1ActionStatus')
           });
-          if (totalChars < 120) {
-            warnings.push(`"${file.name}" (${numPages} trang) là PDF dạng ảnh scan không có lớp chữ. Hãy chuyển sang Excel hoặc dùng nút "+ Nhập / Sửa nhanh bằng tay" bên trên.`);
-            continue;
-          }
           const parsed = window.FPA_PARSER.parseTT200Lines(lines, file.name);
+          if (usedOcr) {
+            warnings.push(`"${file.name}" (${numPages} trang): Đã chạy Auto-OCR trang ${ocrStartPage}–${ocrEndPage} (Đơn vị: ${parsed.unitLabel}). Hãy kiểm tra nhanh các ô bên dưới.`);
+          }
           if (parsed.companyName && !detectedCompany) detectedCompany = parsed.companyName;
           if (!parsed.records.length) {
             warnings.push(`"${file.name}": Có chữ nhưng không nhận diện được bảng B01/B02 chuẩn TT200.`);
@@ -984,7 +995,39 @@ Yêu cầu: Phân tích sắc bén theo đúng 4 bước FP&A và chốt 3 quy�
       renderStagingTable(warnings);
       setStatus(`Đã bóc tách ${extracted.length} năm (${extracted.map(r => r.year).join(', ')}). Hãy rà soát nhanh bên dưới rồi bấm "Thay thế toàn bộ" hoặc "Gộp thêm".`, warnings.length ? 'warn' : 'ok', 'step1ActionStatus');
     } catch (err) {
-      setStatus('Lỗi đọc tệp: ' + err.message, 'err', 'step1ActionStatus');
+      setStatus('Lỗi / Dừng đọc tệp: ' + err.message, 'err', 'step1ActionStatus');
+    } finally {
+      const cancelBtn = document.getElementById('btnCancelOcr');
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      state.abortController = null;
+    }
+  }
+
+  function cancelPdfProcessing() {
+    if (state.abortController) {
+      state.abortController.abort();
+      setStatus('Đang dừng quá trình OCR...', 'warn', 'step1ActionStatus');
+    }
+  }
+
+  function switchSamplePreset(presetKey) {
+    try {
+      const preset = window.FPA_SAMPLE_PRESETS && window.FPA_SAMPLE_PRESETS[presetKey];
+      if (!preset) return;
+      state.meta = JSON.parse(JSON.stringify(preset.meta));
+      state.data = JSON.parse(JSON.stringify(preset.data));
+      state.budget = JSON.parse(JSON.stringify(preset.budget));
+      saveState();
+      syncHeaderAndSelectors();
+      renderOverview();
+      runIntegrityChecks();
+      renderCleanTable();
+      renderVariance();
+      renderDrivers();
+      runScenarioModel();
+      setStatus(`Đã chuyển sang bộ dữ liệu mẫu: ${state.meta.companyName}`, 'ok', 'globalStatus');
+    } catch (err) {
+      setStatus('Lỗi chuyển bộ mẫu: ' + err.message, 'err');
     }
   }
 
@@ -1188,6 +1231,8 @@ Yêu cầu: Phân tích sắc bén theo đúng 4 bước FP&A và chốt 3 quy�
   window.openManualStaging = openManualStaging;
   window.closeStagingBox = closeStagingBox;
   window.commitStagingData = commitStagingData;
+  window.cancelPdfProcessing = cancelPdfProcessing;
+  window.switchSamplePreset = switchSamplePreset;
   window.updateCompanyName = updateCompanyName;
   window.renderVariance = renderVariance;
   window.updateBudgetAndRender = updateBudgetAndRender;

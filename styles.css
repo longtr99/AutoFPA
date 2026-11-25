@@ -457,3 +457,29 @@ select, input[type="number"], input[type="text"] {
   padding: 4px 6px;
   font-size: 12.5px;
 }
+
+/* v3.0 OCR Controls & Progress Bar */
+.ocr-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+.ocr-bar input[type="number"] { width: 64px; padding: 4px 6px; text-align: center; }
+.preset-select {
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.preset-select option { color: #0f172a; background: #fff; }
